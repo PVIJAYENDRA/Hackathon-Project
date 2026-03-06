@@ -1,8 +1,12 @@
 """Live camera analytics: video stream with visitor detection and tracking."""
 
 import streamlit as st
-import cv2
 import numpy as np
+
+try:
+    import cv2  # type: ignore
+except ImportError:  # pragma: no cover - cloud environments may lack OpenCV
+    cv2 = None  # type: ignore
 
 from backend.video_processing import (
     load_yolo_model,
@@ -14,6 +18,16 @@ from backend.video_processing import (
 
 def render() -> None:
     st.header("Live Camera Analytics")
+
+    if cv2 is None:
+        st.error(
+            "OpenCV (`cv2`) is not available in this environment, "
+            "so the live camera view cannot run on Streamlit Cloud.\n\n"
+            "You can still deploy the app and use all analytics pages; "
+            "run it locally with OpenCV installed to use Live Camera."
+        )
+        return
+
     sample_path = get_sample_video_path()
     use_webcam = st.checkbox("Use webcam (if no sample video)", value=not bool(sample_path))
     yolo_model = load_yolo_model()
@@ -34,9 +48,18 @@ def render() -> None:
         if st.button("Run Demo (synthetic frames)"):
             for i in range(20):
                 frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                cv2.putText(frame, "Demo - No video source", (80, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                cv2.putText(
+                    frame,
+                    "Demo - No video source",
+                    (80, 240),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1,
+                    (255, 255, 255),
+                    2,
+                )
                 placeholder.image(frame, channels="BGR")
                 import time
+
                 time.sleep(0.15)
         return
 
