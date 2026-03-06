@@ -3,8 +3,13 @@
 from pathlib import Path
 from typing import Any, Optional
 
-import cv2
 import numpy as np
+
+# OpenCV is optional on some deploy targets (e.g. Streamlit Cloud).
+try:
+    import cv2  # type: ignore
+except ImportError:  # pragma: no cover
+    cv2 = None  # type: ignore
 
 # Zone coordinates as (x1, y1, x2, y2) normalized 0-1 relative to frame
 ZONE_COORDS = {
@@ -39,6 +44,7 @@ def load_yolo_model():
     """Load YOLOv8 model; fallback to None if not available."""
     try:
         from ultralytics import YOLO
+
         return YOLO("yolov8n.pt")
     except Exception:
         return None
@@ -48,6 +54,7 @@ def load_deepsort_tracker():
     """Load DeepSORT tracker; fallback to None if not available."""
     try:
         from deep_sort_realtime.deepsort_tracker import DeepSort
+
         return DeepSort(max_age=30)
     except Exception:
         return None
@@ -55,6 +62,8 @@ def load_deepsort_tracker():
 
 def detect_people_opencv(frame: np.ndarray) -> list[tuple[int, int, int, int]]:
     """Fallback: use OpenCV HOG for person detection. Returns list of (x,y,w,h)."""
+    if cv2 is None:
+        return []
     hog = cv2.HOGDescriptor()
     hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -98,6 +107,10 @@ def process_frame(
     visitor_data = []
     zone_counts: dict[str, float] = {name: 0.0 for name in ZONE_COORDS}
 
+    if cv2 is None:
+        # No annotation possible without OpenCV; return safely.
+        return frame, visitor_data, zone_counts
+
     if tracker is not None and dets:
         try:
             # DeepSORT expects ([left, top, width, height], confidence, class)
@@ -117,14 +130,19 @@ def process_frame(
                 visitor_data.append({"id": tid, "bbox": (x1, y1, x2, y2), "zone": zone})
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(
-                    frame, str(tid), (x1, y1 - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1,
+                    frame,
+                    str(tid),
+                    (x1, y1 - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 255, 0),
+                    1,
                 )
         except Exception:
             pass
     else:
-        for i, (x, y, w, h) in enumerate(dets):
-            x1, y1, x2, y2 = x, y, x + w, y + h
+        for i, (x, y, w_box, h_box) in enumerate(dets):
+            x1, y1, x2, y2 = x, y, x + w_box, y + h_box
             cx = (x1 + x2) / 2 / w
             cy = (y1 + y2) / 2 / h
             zone = get_zone_for_point(cx, cy)
@@ -133,8 +151,13 @@ def process_frame(
             visitor_data.append({"id": i + 1, "bbox": (x1, y1, x2, y2), "zone": zone})
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.putText(
-                frame, str(i + 1), (x1, y1 - 5),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1,
+                frame,
+                str(i + 1),
+                (x1, y1 - 5),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0, 255, 0),
+                1,
             )
 
     return frame, visitor_data, zone_counts
@@ -157,9 +180,10 @@ def generate_heatmap_overlay(
         # BGR: blue (low) -> red (high)
         b = int(255 * (1 - intensity))
         r = int(255 * intensity)
-        color = (b, 128, r)
-        cv2.rectangle(overlay, (x1, y1), (x2, y2), color, -1)
-    return cv2.addWeighted(overlay, 0.3, np.zeros_like(overlay), 0, 0)
+        overlay[y1:y2, x1:x2] = (b, 128, r)
+
+    # Blend using numpy to avoid requiring cv2
+    return (overlay.astype(np.float32) * 0.3).astype(np.uint8)
 
 
 def get_sample_video_path() -> Optional[Path]:
