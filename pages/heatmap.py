@@ -1,12 +1,11 @@
 """Heatmap visualization overlay on showroom layout."""
 
 import streamlit as st
-import cv2
 import numpy as np
 
 from backend.database import SessionLocal
 from backend.analytics import get_zone_popularity, get_dwell_time_by_zone
-from backend.video_processing import ZONE_COORDS, get_sample_video_path
+from backend.video_processing import ZONE_COORDS
 
 
 def render() -> None:
@@ -36,10 +35,8 @@ def render() -> None:
             val = pop_map.get(zone_name, 0) / max_pop
         r = int(255 * val)
         b = int(255 * (1 - val))
-        color = (b, 128, r)
-        cv2.rectangle(overlay, (x1, y1), (x2, y2), color, -1)
-        cv2.putText(overlay, zone_name[:12], (x1 + 5, y1 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+        overlay[y1:y2, x1:x2] = (b, 128, r)
 
-    blended = cv2.addWeighted(base.astype(np.uint8), 0.5, overlay, 0.5, 0)
+    blended = (base.astype(np.float32) * 0.5 + overlay.astype(np.float32) * 0.5).astype(np.uint8)
     st.image(blended, use_container_width=True)
     st.caption("Red = hot (high engagement), Blue = cold (low engagement)")
