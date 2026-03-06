@@ -8,13 +8,6 @@ try:
 except ImportError:  # pragma: no cover - cloud environments may lack OpenCV
     cv2 = None  # type: ignore
 
-from backend.video_processing import (
-    load_yolo_model,
-    load_deepsort_tracker,
-    process_frame,
-    get_sample_video_path,
-)
-
 
 def render() -> None:
     st.header("Live Camera Analytics")
@@ -27,6 +20,14 @@ def render() -> None:
             "run it locally with OpenCV installed to use Live Camera."
         )
         return
+
+    # Import CV pipeline only when OpenCV is available (Streamlit Cloud safe).
+    from backend.video_processing import (
+        load_yolo_model,
+        load_deepsort_tracker,
+        process_frame,
+        get_sample_video_path,
+    )
 
     sample_path = get_sample_video_path()
     use_webcam = st.checkbox("Use webcam (if no sample video)", value=not bool(sample_path))
@@ -46,7 +47,7 @@ def render() -> None:
         st.info("No sample video found. Place sample_video.mp4 in project root or enable webcam.")
         placeholder = st.empty()
         if st.button("Run Demo (synthetic frames)"):
-            for i in range(20):
+            for _ in range(20):
                 frame = np.zeros((480, 640, 3), dtype=np.uint8)
                 cv2.putText(
                     frame,
