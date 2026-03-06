@@ -1,0 +1,16 @@
+streamlit
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+python-jose[cryptography]
+bcrypt
+opencv-python
+ultralytics
+# deepface  # optional - may have dependency conflicts on some systems
+deep-sort-realtime
+pandas
+numpy
+plotly
+openpyxl
+python-multipart
